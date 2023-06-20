@@ -216,7 +216,7 @@ After the installation, there are a few things you should check:
 
 ### I cannot send an email, what's wrong?
 
-check the rejection messages for specific reasons and review the mail server logs at `/var/log/mail.log` or `/var/log/syslog` for further insights.
+Check the rejection messages for specific reasons and review the mail server logs at `/var/log/mail.log` or `/var/log/syslog` for further insights.
 
 ### I am not receiving any emails, what's wrong?
 
@@ -234,6 +234,7 @@ There several reason for this.
     10 box.example.com.
     ```
 2. Check mail server log at `/var/log/mail.log` or `/var/log/syslog` for more details.
+3. Make sure firewall for incoming port 25 is open both on OS and on Amazon Lightsail instance.
 
 ### The installation is stuck, what should I do?
 
