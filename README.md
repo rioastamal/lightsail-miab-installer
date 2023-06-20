@@ -1,6 +1,6 @@
 ## About lightsail-miab-installer
 
-lightsail-miab-installer is a user-friendly command-line tool designed to streamline the setup of [Mail-in-a-Box](https://mailinabox.email/), a comprehensive mail server package, on Amazon Lightsail. It has seamless integration with Amazon S3 for backups and Amazon SES for email sending (relay), this open-source installer offers a quick and efficient way to host your own email solution.
+lightsail-miab-installer is a user-friendly command-line tool designed to streamline the setup of [Mail-in-a-Box](https://mailinabox.email/) (a comprehensive mail server package) on Amazon Lightsail. This installer is configured to integrate with Amazon S3 for backups and Amazon SES for email sending (relay), it offers a quick and efficient way to host your own email solution.
 
 To begin installation, run the following command.
 
@@ -210,6 +210,7 @@ After the installation, there are a few things you should check:
 - Ensure that the nameserver of your domain is correctly pointing to the box. The process of changing the nameserver depends on your DNS provider. Refer to your DNS provider's documentation for instructions. 
 - Provision SSL certificates by logging into the Admin panel and navigating to **System &gt; TLS (SSL) Certificates**. Then, click the Provision button.
 - Verify that your domain is successfully verified on Amazon SES before sending any emails. You can find more details in the ["Verified identities"](https://docs.aws.amazon.com/ses/latest/dg/verify-addresses-and-domains.htm) section of Amazon SES. Note that the verification process may take several minutes. If it takes too long, you can try removing the identity and creating a new one.
+- For production use, if your Amazon SES account is still in sandbox mode, it is necessary to [request the removal of sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) restrictions for your account.
 - If you are using an external DNS service for your domain, verify that the related DNS records, such as MX, SPF, DKIM, and DMARC settings, are properly configured. These settings are crucial for email delivery and security. Ensure they are accurately set according to the guidelines provided by your DNS service or in the Mail-in-a-Box documentation.
 
 ## FAQ
