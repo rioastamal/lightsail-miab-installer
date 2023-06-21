@@ -43,6 +43,7 @@ All the data in your Amazon S3 bucket will be preserved, allowing you to restore
   - [Is it safe to delete installation via CloudFormation?](#is-it-safe-to-delete-installation-via-cloudFormation)
   - [How do I skip SSH passphrase?](#how-do-i-skip-ssh-passphrase)
 - [Changelog](#Changelog)
+- [Credits](#credit)
 - [Contributing](#Changelog)
 - [License](#license)
   
@@ -261,6 +262,14 @@ ssh-add /path/to/your/ssh-private.key
 ### v1.0-RC1 (2023-06-20)
 
 - Initial release candidate
+
+
+## Credits
+
+This project is heavily inspired from:
+
+- [Fully Automated Deployment of an Open Source Mail Server on AWS](#) by Michael Meidlinger and David Schwendemann.
+- [aws-samples/aws-opensource-mailserver](https://github.com/aws-samples/aws-opensource-mailserver)
 
 ## Contributing
 
