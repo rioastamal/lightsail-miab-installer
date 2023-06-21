@@ -43,7 +43,7 @@ All the data in your Amazon S3 bucket will be preserved, allowing you to restore
   - [Is it safe to delete installation via CloudFormation?](#is-it-safe-to-delete-installation-via-cloudFormation)
   - [How do I skip SSH passphrase?](#how-do-i-skip-ssh-passphrase)
 - [Changelog](#Changelog)
-- [Credits](#credit)
+- [Credits](#credits)
 - [Contributing](#Changelog)
 - [License](#license)
   
