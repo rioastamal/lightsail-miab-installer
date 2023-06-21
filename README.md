@@ -268,7 +268,7 @@ ssh-add /path/to/your/ssh-private.key
 
 This project is heavily inspired from:
 
-- [Fully Automated Deployment of an Open Source Mail Server on AWS](#) by Michael Meidlinger and David Schwendemann.
+- [Fully Automated Deployment of an Open Source Mail Server on AWS](https://aws.amazon.com/blogs/opensource/fully-automated-deployment-of-an-open-source-mail-server-on-aws/) by Michael Meidlinger and David Schwendemann.
 - [aws-samples/aws-opensource-mailserver](https://github.com/aws-samples/aws-opensource-mailserver)
 
 ## Contributing
