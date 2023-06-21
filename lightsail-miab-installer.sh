@@ -833,7 +833,7 @@ EOF
       --region "$LMIAB_REGION" | tee -a $LMIAB_LOG_FILE
   }
   
-  lmiab_wait_for_node_to_be_ready "$_NODE_IP"
+  # lmiab_wait_for_node_to_be_ready "$_NODE_IP"
 
   # Not sure why it always failed to make SSH connection at this stage  
   # lmiab_log "Disabling postgrey configuration" 
