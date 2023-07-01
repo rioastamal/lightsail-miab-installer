@@ -266,7 +266,8 @@ ssh-add /path/to/your/ssh-private.key
 
 ## Todo
 
-- [ ] Ability to automatically restore from S3 backup
+- [ ] Automatically generate TLS certificates for main domain
+- [ ] Automatically restore from S3 backup
 - [ ] Test on different shells (dash, zsh)
 
 ## Credits
