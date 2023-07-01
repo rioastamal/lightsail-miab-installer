@@ -229,7 +229,7 @@ lmiab_get_lightsail_regions()
   
   [ -f "$_CACHEFILE" ] && _REGIONS="$( cat $_CACHEFILE )"
   [ ! -f "$_CACHEFILE" ] && {
-    _REGIONS="$( aws lightsail get-regions | jq -r '.regions[].name' )"
+    _REGIONS="$( aws lightsail get-regions | jq -r '.regions[] | (.name + "\t" + .displayName)' )"
     echo "$_REGIONS" > $_CACHEFILE
   }
   
@@ -244,7 +244,7 @@ lmiab_is_region_valid()
   local _REGIONS="$( lmiab_get_lightsail_regions 2>/dev/null )"
   local _VALID="false"
   
-  for region in $( echo "$_REGIONS" )
+  for region in $( echo "$_REGIONS" | awk '{print $1}' )
   do
     region="$( echo $region | tr -d '[:space:]' )"
     [ "$region" = "$_REGION_NAME" ] && {
@@ -273,6 +273,14 @@ lmiab_get_region_az()
   }
   
   echo "$_AZ"
+}
+
+lmiab_get_region_display_name()
+{
+  local _REGION_ID=$1
+  local _REGIONS="$( lmiab_get_lightsail_regions 2>/dev/null )"
+  
+  echo "$_REGIONS" | grep "$_REGION_ID" | awk '{print $2}'
 }
 
 lmiab_is_az_valid()
@@ -598,7 +606,8 @@ lmiab_run_cloudformation()
 This process will install Mail-in-a-Box on an Amazon Lightsail instance.
 
       CloudFormation stack: $LMIAB_CLOUDFORMATION_STACKNAME
-                    Region: $LMIAB_REGION
+                    Region: $LMIAB_REGION_DISPLAY_NAME
+         Availability Zone: $LMIAB_AZ
                  Node plan: $LMIAB_PLAN
     Lightsail SSH key pair: $LMIAB_SSH_LIGHTSAIL_KEYPAIR_NAME
       SSH private key file: $LMIAB_SSH_PRIVATE_KEY_FILE
@@ -1175,6 +1184,7 @@ lmiab_init()
   # Remove the last character from AZ to get region
   # See https://unix.stackexchange.com/questions/144298/delete-the-last-character-of-a-string-using-string-manipulation-in-shell-script
   LMIAB_REGION="${LMIAB_AZ%?}"
+  LMIAB_REGION_DISPLAY_NAME="$( lmiab_get_region_display_name "$LMIAB_REGION" )"
   
   export AWS_REGION=$LMIAB_REGION
   
