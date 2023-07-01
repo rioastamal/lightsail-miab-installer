@@ -42,7 +42,8 @@ All the data in your Amazon S3 bucket will be preserved, allowing you to restore
   - [The installation is stuck, what should I do?](#the-installation-is-stuck-what-should-i-do)
   - [Is it safe to delete installation via CloudFormation?](#is-it-safe-to-delete-installation-via-cloudFormation)
   - [How do I skip SSH passphrase?](#how-do-i-skip-ssh-passphrase)
-- [Changelog](#Changelog)
+- [Changelog](#changelog)
+- [Todo](#todo)
 - [Credits](#credits)
 - [Contributing](#Changelog)
 - [License](#license)
@@ -263,6 +264,10 @@ ssh-add /path/to/your/ssh-private.key
 
 - Initial release candidate
 
+## Todo
+
+- [ ] Ability to automatically restore from S3 backup
+- [ ] Test on different shells (dash, zsh)
 
 ## Credits
 
