@@ -590,6 +590,7 @@ lmiab_run_cloudformation()
   local _TITLE="lightsail-miab-installer v${LMIAB_VERSION}"
   local _ANY_KEY=""
   
+  echo
   lmiab_char_repeat "-" $( echo $_TITLE | wc -c ) && echo
   echo $_TITLE
   lmiab_char_repeat "-" $( echo $_TITLE | wc -c ) && echo
@@ -738,6 +739,10 @@ grep "\$PRIMARY_HOSTNAME" /etc/hosts >/dev/null 2>/dev/null || {
 echo "[LMIAB Init Script]: Running setup/start.sh"
 cd /opt/mailinabox/ && setup/start.sh
 
+echo "[LMIAB Init Script]: Disabling ufw and fail2ban..."
+fail2ban-client stop
+ufw disable
+
 INIT_SCRIPT
 )"
 
@@ -832,12 +837,16 @@ EOF
       --node-ip "$_NODE_IP" \
       --region "$LMIAB_REGION" | tee -a $LMIAB_LOG_FILE
   }
-  
-  # lmiab_wait_for_node_to_be_ready "$_NODE_IP"
 
-  # Not sure why it always failed to make SSH connection at this stage  
-  # lmiab_log "Disabling postgrey configuration" 
-  # lmiab_disable_postgrey $_NODE_IP | tee -a $LMIAB_LOG_FILE
+  lmiab_log "Disabling postgrey configuration" 
+  lmiab_disable_postgrey $_NODE_IP | tee -a $LMIAB_LOG_FILE
+  
+  lmiab_log "Re-enabling ufw and fail2ban..."
+  cat << ENABLE_SSH | lmiab_ssh_to_node $_NODE_IP sudo bash
+ufw --force enable
+fail2ban-client start
+ENABLE_SSH
+  
   lmiab_log "Installation COMPLETED.
 
 Notes: Please make sure to update nameserver of your domain to point to this 
