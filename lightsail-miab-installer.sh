@@ -24,6 +24,7 @@ LMIAB_CACHE_DIR="$LMIAB_OUTPUT_DIR/caches"
 [ -z "$LMIAB_AZ" ] && LMIAB_AZ="us-east-1a"
 [ -z "$LMIAB_PLAN" ] && LMIAB_PLAN="5_usd"
 [ -z "$LMIAB_DEBUG" ] && LMIAB_DEBUG="true"
+[ -z "$LMIAB_IS_RESTORE" ] && LMIAB_IS_RESTORE="no"
 [ -z "$LMIAB_PACKAGE_URL" ] && LMIAB_PACKAGE_URL="https://github.com/mail-in-a-box/mailinabox/archive/8b19d157359e402f751c86f7e0a1276011277648.tar.gz"
 [ -z "$LMIAB_SMTP_RELAY_ENDPOINT" ] && LMIAB_SMTP_RELAY_ENDPOINT=""
 [ -z "$LMIAB_SMTP_RELAY_PORT" ] && LMIAB_SMTP_RELAY_PORT="587"
@@ -48,6 +49,12 @@ LMIAB_OS_USERNAME="ubuntu"
 # Required tools to perform tasks
 LMIAB_REQUIRED_TOOLS="awk aws base64 cat cut date jq openssl sed ssh tee tr wc"
 
+# WARNING! Undocumented flag for destroying all resources
+# Only can be activated by --destroy-all-resources flag
+LMIAB_DESTROY_ALL_RESOURCES="no"
+# Environment below only used in conjunction with LMIAB_DESTROY_ALL_RESOURCES
+[ -z "$LMIAB_DELETE_S3_BUCKET" ] && LMIAB_DELETE_S3_BUCKET="yes"
+
 # In memory cache
 LMIAB_CACHE_NODE_PUBLIC_IP=""
 
@@ -68,7 +75,7 @@ Where OPTIONS:
   --dry-run               Dry run mode, print CloudFormation template and exit.
   --email EMAIL           Mail-in-a-Box administrator email specified by EMAIL.
                           An example 'admin@example.com'.
-  --help                  print this help and exit.
+  --help                  Print this help and exit.
   --hostname HOSTNAME     Mail-in-a-Box primary hostname specified by HOSTNAME.
                           An example 'box.example.com'.
   --installation-id ID    Installation identifier by ID, e.g 'demo'.
@@ -77,6 +84,9 @@ Where OPTIONS:
                           '160_usd'. Default is '5_usd'.
   --password PASSWD       Mail-in-a-Box administrator password specified by 
                           PASSWD.
+  --restore               Restore installation data from backup which stored on
+                          S3 bucket. See --restore-help for more info.
+  --restore-help          Print help information how to restore from backup.
   --version               Print script version.
 
 --------------------------- lightsail-miab-installer ---------------------------
@@ -87,6 +97,24 @@ Amazon Lightsail.
 
 lightsail-miab-installer is free software licensed under MIT. Visit the project 
 homepage at http://github.com/rioastamal/lightsail-miab-installer."
+}
+
+lmiab_restore_help()
+{
+  echo "\
+In order to restore Mail-in-a-Box data from previous installation you need to
+set several environment variables.
+
+LMIAB_MAIL_BACKUP_BUCKET=
+  S3 bucket name which stores mail backup from previous installation.
+  
+LMIAB_NEXTCLOUD_BACKUP_BUCKET=
+  S3 Bucket name which stores Nextcloud backup from previous installation.
+
+LMIAB_BACKUP_SECRET_KEY=
+  Mail-in-a-Box backup secret key from previous installation, which you can find 
+  it at /home/user-data/backup/secret_key.txt or via AWS System Manager 
+  Parameter Stores."
 }
 
 lmiab_write_log()
@@ -334,7 +362,6 @@ lmiab_char_repeat()
 lmiab_cf_template_header()
 {
   echo "AWSTemplateFormatVersion: '2010-09-09'"
-  echo "Resources:"
   
   return 0
 }
@@ -430,6 +457,18 @@ EOF
 )"
 
   cat <<EOF
+Parameters:
+  IsRestoreParam:
+    Type: String
+    Default: 'no'
+    AllowedValues:
+      - 'yes'
+      - 'no'
+Conditions:
+  IsNotRestoreCondition: !Equals
+    - !Ref IsRestoreParam
+    - 'no'
+Resources:
   $_RESOURCE_NAME:
     Type: AWS::Lightsail::Instance
     Properties:
@@ -484,6 +523,7 @@ $_NETWORKING_RULES
   ${_RESOURCE_NAME}MailBackup:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    Condition: IsNotRestoreCondition
     Properties:
       BucketName: $LMIAB_MAIL_BACKUP_BUCKET
       LifecycleConfiguration:
@@ -496,6 +536,7 @@ $_NETWORKING_RULES
   ${_RESOURCE_NAME}NextCloudBackup:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    Condition: IsNotRestoreCondition
     Properties:
       BucketName: $LMIAB_NEXTCLOUD_BACKUP_BUCKET
       LifecycleConfiguration:
@@ -512,6 +553,7 @@ $_NETWORKING_RULES
       Status: Active
   ${_RESOURCE_NAME}SesIdentity:
     Type: AWS::SES::EmailIdentity
+    DeletionPolicy: Retain
     Properties:
       EmailIdentity: $LMIAB_EMAIL_DOMAIN
       DkimAttributes: 
@@ -540,23 +582,95 @@ $_NETWORKING_RULES
       Name: /MailInABox/$_CF_STACKNAME/Ses/SmtpPassword
       Type: String
       Value: UpdatedByInstaller
-  ${_RESOURCE_NAME}BackupSecretKey:
+  ${_RESOURCE_NAME}BackupSecretKeySsm:
     Type: AWS::SSM::Parameter
-    Properties:
-      Name: /MailInABox/$_CF_STACKNAME/BackupSecretKey
-      Type: String
-      Value: UpdatedByInstaller
-  ${_RESOURCE_NAME}BackupSecretKey:
-    Type: AWS::SSM::Parameter
+    DeletionPolicy: Retain
     Properties:
       Name: /MailInABox/$_CF_STACKNAME/BackupSecretKey
       Type: String
       Value: UpdatedByInstaller
   ${_RESOURCE_NAME}StaticIP:
     Type: AWS::Lightsail::StaticIp
+    DeletionPolicy: Retain
     Properties:
       AttachedTo: !Ref $_RESOURCE_NAME
       StaticIpName: ${_INSTANCE_NAME}-Ip
+Outputs:
+  LightsailInstance:
+    Value: !Ref $_RESOURCE_NAME
+  LightsailInstanceUrl:
+    Value: !Sub
+      - 'https://lightsail.aws.amazon.com/ls/webapp/\${AWS::Region}/instances/\${INSTANCE_NAME}/connect'
+      - REGION: !Ref AWS::Region
+        INSTANCE_NAME: !Ref $_RESOURCE_NAME
+  LightsailIP:
+    Value: !Ref ${_RESOURCE_NAME}StaticIP
+  LightsailIPUrl:
+    Value: !Sub
+      - 'https://lightsail.aws.amazon.com/ls/webapp/\${REGION}/static-ips/\${IP_NAME}/connect'
+      - REGION: !Ref AWS::Region
+        IP_NAME: !Ref ${_RESOURCE_NAME}StaticIP
+  S3MailBackupBucket:
+    Condition: IsNotRestoreCondition
+    Value: !Ref ${_RESOURCE_NAME}MailBackup
+  S3MailBackupBucketUrl:
+    Condition: IsNotRestoreCondition
+    Value: !Sub
+      - 'https://s3.console.aws.amazon.com/s3/buckets/\${BUCKET_NAME}?region=\${REGION}&tab=objects'
+      - BUCKET_NAME: !Ref ${_RESOURCE_NAME}MailBackup
+        REGION: !Ref AWS::Region
+  S3NextCloudBackupBucket:
+    Condition: IsNotRestoreCondition
+    Value: !Ref ${_RESOURCE_NAME}NextCloudBackup
+  S3NextCloudBackupBucketUrl:
+    Condition: IsNotRestoreCondition
+    Value: !Sub
+      - 'https://s3.console.aws.amazon.com/s3/buckets/\${BUCKET_NAME}?region=\${REGION}&tab=objects'
+      - BUCKET_NAME: !Ref ${_RESOURCE_NAME}NextCloudBackup
+        REGION: !Ref AWS::Region
+  SesIdentity:
+    Value: !Ref ${_RESOURCE_NAME}SesIdentity
+  SesIdentityUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/ses/home?region=\${REGION}#/verified-identities/\${DOMAIN}'
+      - REGION: !Ref AWS::Region
+        DOMAIN: '$LMIAB_EMAIL_DOMAIN'
+  AdminPasswordSsm:
+    Value: !Ref ${_RESOURCE_NAME}AdminPasswordSsm
+  AdminPasswordSsmUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/systems-manager/parameters\${PARAM_NAME}/description?region=\${REGION}'
+      - PARAM_NAME: !Ref ${_RESOURCE_NAME}AdminPasswordSsm
+        REGION: !Ref AWS::Region
+  SesUserSsm:
+    Value: !Ref ${_RESOURCE_NAME}SesUserSsm
+  SesUserSsmUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/systems-manager/parameters\${PARAM_NAME}/description?region=\${REGION}'
+      - PARAM_NAME: !Ref ${_RESOURCE_NAME}SesUserSsm
+        REGION: !Ref AWS::Region
+  SesSecretKeySsm:
+    Value: !Ref ${_RESOURCE_NAME}SesSecretKeySsm
+  SesSecretKeySsmUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/systems-manager/parameters\${PARAM_NAME}/description?region=\${REGION}'
+      - PARAM_NAME: !Ref ${_RESOURCE_NAME}SesSecretKeySsm
+        REGION: !Ref AWS::Region
+  SesPasswordSsm:
+    Value: !Ref ${_RESOURCE_NAME}SesPasswordSsm
+  SesPasswordSsmUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/systems-manager/parameters\${PARAM_NAME}/description?region=\${REGION}'
+      - PARAM_NAME: !Ref ${_RESOURCE_NAME}SesPasswordSsm
+        REGION: !Ref AWS::Region
+  BackupSecretKeySsm:
+    Value: !Ref ${_RESOURCE_NAME}BackupSecretKeySsm
+  BackupSecretKeySsmUrl:
+    Value: !Sub
+      - 'https://console.aws.amazon.com/systems-manager/parameters\${PARAM_NAME}/description?region=\${REGION}'
+      - PARAM_NAME: !Ref ${_RESOURCE_NAME}BackupSecretKeySsm
+        REGION: !Ref AWS::Region
+
 EOF
   
   return 0
@@ -616,6 +730,15 @@ Amazon SES domain identity: $LMIAB_EMAIL_DOMAIN
  Mail-in-a-Box Admin email: $LMIAB_ADMIN_EMAIL
 EOF
 
+  [ "$LMIAB_IS_RESTORE" = "yes" ] && {
+    cat <<EOF
+
+Data will be restored from following S3 buckets:
+       Mail data: s3://$LMIAB_MAIL_BACKUP_BUCKET
+  Nextcloud data: s3://$LMIAB_NEXTCLOUD_BACKUP_BUCKET
+EOF
+  }
+
   [ ! -z "$LMIAB_ADMIN_PASSWORD" ] && {
     cat <<EOF
     Mail-in-a-Box password: $( echo "$LMIAB_ADMIN_PASSWORD" | sed 's/./*/g' )
@@ -660,7 +783,8 @@ EOF
   lmiab_log "Creating stack '${LMIAB_CLOUDFORMATION_STACKNAME}'"
   aws cloudformation create-stack \
     --capabilities "CAPABILITY_NAMED_IAM" \
-    --stack-name="$LMIAB_CLOUDFORMATION_STACKNAME" \
+    --stack-name "$LMIAB_CLOUDFORMATION_STACKNAME" \
+    --parameters ParameterKey=IsRestoreParam,ParameterValue=$LMIAB_IS_RESTORE \
     --template-body file://$_TEMPLATE_OUT_FILE >> $LMIAB_LOG_FILE 2>&1
 
   local STACK_STATUS=""
@@ -670,7 +794,7 @@ EOF
   do
     lmiab_log_waiting "Waiting stack '$LMIAB_CLOUDFORMATION_STACKNAME' to be ready$( lmiab_char_repeat '.' $_WAIT_COUNTER )"
     STACK_STATUS="$( aws cloudformation describe-stacks \
-                    --stack-name="$LMIAB_CLOUDFORMATION_STACKNAME" 2>>$LMIAB_LOG_FILE | \
+                    --stack-name "$LMIAB_CLOUDFORMATION_STACKNAME" 2>>$LMIAB_LOG_FILE | \
                     jq -r '.Stacks[0].StackStatus' )"
 
     [ $_WAIT_COUNTER -ge 3 ] && _WAIT_COUNTER=0
@@ -742,7 +866,7 @@ curl -s -L "$LMIAB_PACKAGE_URL" -o /tmp/mail-in-a-box.tar.gz && \
 # 'sudo' trying to resolv the hostname and could cause timeout.
 echo "[LMIAB Init Script]: Adding hostname '\$PRIMARY_HOSTNAME' to /etc/hosts"
 grep "\$PRIMARY_HOSTNAME" /etc/hosts >/dev/null 2>/dev/null || {
-  echo "\$PUBLIC_IP \$PRIMARY_HOSTNAME" >> /etc/hosts
+  echo "127.0.0.1 \$PRIMARY_HOSTNAME" >> /etc/hosts
 }
 
 echo "[LMIAB Init Script]: Running setup/start.sh"
@@ -850,10 +974,37 @@ EOF
   lmiab_log "Disabling postgrey configuration" 
   lmiab_disable_postgrey $_NODE_IP | tee -a $LMIAB_LOG_FILE
   
+  [ "$LMIAB_IS_RESTORE" = "yes" ] && {
+    lmiab_log "Restoring data from previous installation..."
+    lmiab_restore_from_backup \
+      --aws-accesskey "$_ACCESS_KEY" \
+      --aws-secretkey "$_SECRET_KEY" \
+      --backup-key "$LMIAB_BACKUP_SECRET_KEY" \
+      --hostname "$LMIAB_BOX_HOSTNAME" \
+      --mail-bucket "$LMIAB_MAIL_BACKUP_BUCKET" \
+      --node-ip "$_NODE_IP" \
+      --region "$LMIAB_REGION"
+    
+    lmiab_log "Overwriting secret_key.txt..."
+      cat <<SECRET_TXT | lmiab_ssh_to_node $_NODE_IP sudo bash
+cp /home/user-data/backup/secret_key.txt /home/user-data/backup/secret_key.txt.orig
+echo "$LMIAB_BACKUP_SECRET_KEY" > /home/user-data/backup/secret_key.txt
+SECRET_TXT
+
+    lmiab_log "Reconfiguring S3 backup because it should be overridden by previous restore process..."
+    lmiab_create_custom_s3_backup_config \
+      --aws-accesskey "$_ACCESS_KEY" \
+      --aws-secretkey "$_SECRET_KEY" \
+      --mail-bucket "$LMIAB_MAIL_BACKUP_BUCKET" \
+      --nextcloud-bucket "$LMIAB_NEXTCLOUD_BACKUP_BUCKET" \
+      --node-ip "$_NODE_IP" \
+      --region "$LMIAB_REGION" | tee -a $LMIAB_LOG_FILE
+  }
+  
   lmiab_log "Re-enabling ufw and fail2ban..."
   cat << ENABLE_SSH | lmiab_ssh_to_node $_NODE_IP sudo bash
 ufw --force enable
-fail2ban-client start
+fail2ban-client status >/dev/null 2>&1 || fail2ban-client start
 ENABLE_SSH
   
   lmiab_log "Installation COMPLETED.
@@ -1072,6 +1223,38 @@ service postgrey restart
 EOF
 }
 
+lmiab_restore_from_backup()
+{
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --aws-accesskey) local _ACCESS_KEY="$2"; shift ;;
+      --aws-secretkey) local _SECRET_KEY="$2"; shift ;;
+      --backup-key) local _BACKUP_KEY="$2"; shift ;;
+      --hostname) local _HOSTNAME="$2"; shift ;;
+      --mail-bucket) local _MAIL_BUCKET="$2"; shift ;;
+      --node-ip) local _NODE_IP="$2"; shift ;;
+      --region) local _REGION="$2"; shift ;;
+      *) echo "Unrecognised option passed: $1" 2>&2; return 1;;
+    esac
+    shift
+  done
+  
+  cat <<RESTORE | lmiab_ssh_to_node $_NODE_IP sudo bash
+export NONINTERACTIVE=1
+export PRIMARY_HOSTNAME="$_HOSTNAME"
+
+rm -rf /home/user-data/ssl/* 
+
+export AWS_ACCESS_KEY_ID="$_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="$_SECRET_KEY"
+export PASSPHRASE="$_BACKUP_KEY"
+
+duplicity restore --force --s3-region-name=$_REGION s3://$_MAIL_BUCKET /home/user-data/
+
+mailinabox
+RESTORE
+}
+
 lmiab_put_dummy_object_to_bucket()
 {
   # There is small bug on Mail-in-a-Box Python script management/backup.py which
@@ -1115,8 +1298,11 @@ lmiab_destroy_installation()
   
   echo
   lmiab_log "Checking CloudFormation stack '$LMIAB_CLOUDFORMATION_STACKNAME'"
-  aws cloudformation describe-stacks --stack-name $LMIAB_CLOUDFORMATION_STACKNAME \
-    2>>$LMIAB_LOG_FILE >/dev/null || {
+  
+  local _CF_DESCRIBE_STACKS="$( aws cloudformation describe-stacks \
+    --stack-name $LMIAB_CLOUDFORMATION_STACKNAME \
+    2>>$LMIAB_LOG_FILE
+  )" || {
     lmiab_log "Stack not found, aborted."
     return 1
   }
@@ -1137,7 +1323,54 @@ lmiab_destroy_installation()
   done
   
   echo
-  lmiab_log "Installation '$LMIAB_INSTALLATION_ID' has been destroyed."
+  lmiab_log "Installation '$LMIAB_INSTALLATION_ID' has been destroyed.
+
+Resources below are kept for your future backup/restore purporse, if you want to
+delete them you have to do it manually:
+- Amazon Lightsail static IP 
+- Amazon S3 buckets for mail and nextcloud backup
+- Amazon SSM Parameter Store for storing secret_key.txt
+- Amazon SES Email Identity
+"
+
+  [ "$LMIAB_DESTROY_ALL_RESOURCES" = "yes" ] && {
+    lmiab_log "Destroying all resources..."
+    lmiab_destroy_all_resources "$_CF_DESCRIBE_STACKS"
+  }
+
+  return 0
+}
+
+# Create a function to empty s3 bucket and delete the bucket
+
+lmiab_destroy_all_resources()
+{
+  local _CF_DESCRIBE_STACKS="$1"
+
+  local _RESOURCE_LIST="$( echo "$_CF_DESCRIBE_STACKS" | \
+    jq -r '.Stacks[].Outputs[] | ( .OutputKey + "\t" + .OutputValue )' )"
+
+  [ "$LMIAB_DELETE_S3_BUCKET" = "yes" ] && {
+    local _S3_MAIL_BUCKET="$( echo "$_RESOURCE_LIST" | grep 'S3MailBackupBucket\s' | awk '{print $2}' )"
+    lmiab_log "Deleting mail backup bucket '$_S3_MAIL_BUCKET'..."
+    (aws s3 rm s3://$_S3_MAIL_BUCKET --recursive && aws s3 rb s3://$_S3_MAIL_BUCKET) >> $LMIAB_LOG_FILE
+    
+    local _S3_NEXTCLOUD_BUCKET="$( echo "$_RESOURCE_LIST" | grep 'S3NextCloudBackupBucket\s' | awk '{print $2}' )"
+    lmiab_log "Deleting mail backup bucket '$_S3_NEXTCLOUD_BUCKET'..."
+    (aws s3 rm s3://$_S3_NEXTCLOUD_BUCKET --recursive && aws s3 rb s3://$_S3_NEXTCLOUD_BUCKET) >> $LMIAB_LOG_FILE
+  }
+  
+  local _SSM_BACKUP_SECRET_KEY="$( echo "$_RESOURCE_LIST" | grep 'BackupSecretKeySsm\s' | awk '{print $2}' )"
+  lmiab_log "Deleting secret_key.txt Parameter Store '$_SSM_BACKUP_SECRET_KEY'..."
+  aws ssm delete-parameter --name $_SSM_BACKUP_SECRET_KEY >> $LMIAB_LOG_FILE
+  
+  local _LIGHTSAIL_STATIC_IP="$( echo "$_RESOURCE_LIST" | grep 'LightsailIP\s' | awk '{print $2}' )"
+  lmiab_log "Deleting Lightsail static IP '$_LIGHTSAIL_STATIC_IP'..."
+  aws lightsail release-static-ip --static-ip-name $_LIGHTSAIL_STATIC_IP >> $LMIAB_LOG_FILE
+  
+  local _SES_IDENTITY="$( echo "$_RESOURCE_LIST" | grep 'SesIdentity\s' | awk '{print $2}' )"
+  lmiab_log "Deleting SES Identity '$_SES_IDENTITY'..."
+  aws ses delete-identity --identity $_SES_IDENTITY >> $LMIAB_LOG_FILE
   
   return 0
 }
@@ -1156,6 +1389,19 @@ lmiab_init()
     echo "Missing tool: ${_MISSING_TOOL}. Make sure it is installed and available in your PATH." >&2
     return 1
   }
+  
+  for _env in LMIAB_MAIL_BACKUP_BUCKET LMIAB_NEXTCLOUD_BACKUP_BUCKET LMIAB_BACKUP_SECRET_KEY
+  do
+    [ -z "${!_env}" ] && [ "$LMIAB_IS_RESTORE" = "yes" ] && {
+      echo "Missing env '$_env' value." >&2
+      return 1
+    }
+    
+    [ ! -z "${!_env}" ] && [ "$LMIAB_IS_RESTORE" = "no" ] && {
+      echo "Env '$_env' can only be used with --restore flag." >&2
+      return 1
+    }
+  done
 
   [ "$LMIAB_ACTION" = "install" ] && {
     [ -z "$LMIAB_ADMIN_EMAIL" ] && {
@@ -1215,9 +1461,13 @@ while [ $# -gt 0 ]; do
       shift 
     ;;
     --destroy)
-      # LMIAB_INSTALLATION_ID="$2"
       LMIAB_ACTION="destroy"
-      shift 
+    ;;
+    # !! WARNING !! #
+    # Undocumented feature #
+    --destroy-all-resources)
+      LMIAB_ACTION="destroy"
+      LMIAB_DESTROY_ALL_RESOURCES="yes"
     ;;
     --disable-smtp-relay)
       LMIAB_DISABLE_SMTP_RELAY="yes"
@@ -1250,6 +1500,13 @@ while [ $# -gt 0 ]; do
     --password)
       LMIAB_ADMIN_PASSWORD="$2"
       shift
+    ;;
+    --restore)
+      LMIAB_IS_RESTORE="yes"
+    ;;
+    --restore-help)
+      lmiab_restore_help
+      exit 0
     ;;
     --version)
       echo "lightsail-miab-installer version $LMIAB_VERSION"
