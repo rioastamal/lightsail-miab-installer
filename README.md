@@ -14,15 +14,6 @@ sh lightsail-miab-installer.sh \
 
 Your mail server should up and running in few minutes, and you can access it using a web interface. By default it will be installed on $5 USD/mo Amazon Lightsail instance.
 
-To destroy the installation.
-
-```sh
-sh lightsail-miab-installer.sh \
-  --installation-id demo \
-  --az ap-southeast-1a  \
-  --destroy
-```
-
 All the data in your Amazon S3 bucket will be preserved, allowing you to restore it on another machine if needed. Additionally, you have the option to delete the stack using the CloudFormation web console or AWS CLI.
 
 #### Navigate:
@@ -34,6 +25,8 @@ All the data in your Amazon S3 bucket will be preserved, allowing you to restore
   - [Specify email and password for Administrator](#specify-email-and-password-for-administrator)
   - [Specify instance type](#specify-instance-type)
   - [Specify availability zone](#specify-availability-zone)
+  - [Restore from backup](#restore-from-backup)
+  - [Destroy installation](#destroy-installation)
   - [Dry run mode](#dry-run-mode)
 - [Post installation](#post-installation)
 - [FAQ](#faq)
@@ -88,13 +81,13 @@ Where OPTIONS:
                           'us-east-1a'.
   --destroy               Destroy installation specified by --installation-id.
   --disable-s3-backup     Do not configure Mail-in-a-Box to backup mailserver
-                          data to Amazon S3. (Not recommended)
+                          data to Amazon S3.
   --disable-smtp-relay    Do not configure Postfix to use Amazon SES as SMTP 
-                          relay. (Not recommended)
+                          relay.
   --dry-run               Dry run mode, print CloudFormation template and exit.
   --email EMAIL           Mail-in-a-Box administrator email specified by EMAIL.
                           An example 'admin@example.com'.
-  --help                  print this help and exit.
+  --help                  Print this help and exit.
   --hostname HOSTNAME     Mail-in-a-Box primary hostname specified by HOSTNAME.
                           An example 'box.example.com'.
   --installation-id ID    Installation identifier by ID, e.g 'demo'.
@@ -103,11 +96,14 @@ Where OPTIONS:
                           '160_usd'. Default is '5_usd'.
   --password PASSWD       Mail-in-a-Box administrator password specified by 
                           PASSWD.
+  --restore               Restore installation data from backup which stored on
+                          S3 bucket. See --restore-help for more info.
+  --restore-help          Print help information how to restore from backup.
   --version               Print script version.
 
 --------------------------- lightsail-miab-installer ---------------------------
 
-lightsail-miab-installer is a user-friendly command line tool powered by 
+lightsail-miab-installer is a powerful command line tool powered by 
 Mail-in-a-Box, designed to simplify the setup of a complete mail server on 
 Amazon Lightsail.
 
@@ -164,7 +160,7 @@ Domain of the email doesn't have to be the same as the hostname.
 
 Default Lightsail plan used is $5 USD/mo with 1GB of RAM and 40GB of SSD disk. If you want to change this, you can specify using `--instance-type` option.
 
-```
+```sh
 sh lightsail-miab-installer.sh \
   --installation-id demo \
   --az ap-southeast-1c \
@@ -180,7 +176,7 @@ Command above will use $20/mo plan, which offers 4GB of RAM, 2 Core CPU and 80GB
 
 Default availability zone is `us-east-1a`. To change the availability zone you can use `--az` option, e.g `eu-west-1a` Europe (Ireland).
 
-```
+```sh
 sh lightsail-miab-installer.sh \
   --installation-id demo \
   --az eu-west-1 \
@@ -188,6 +184,51 @@ sh lightsail-miab-installer.sh \
   --email 'admin@example.com' \
   --password 'lightsaildemo123' \
   --instance-type 20_usd
+```
+
+### Restore from backup
+
+To restore from backup, you need to specify several configurations from previous installation: 
+
+1. Amazon S3 buckets that are used to store the mail backup and Nextcloud data
+2. Mail-in-a-Box backup secret key can be found on your old box machine at `/home/user-data/backup/secret_key.txt` or in the AWS SSM Parameter Store at  `/MailInABox/miab-[INSTALLATION_ID]/BackupSecretKey`.
+
+```sh
+export LMIAB_BACKUP_SECRET_KEY='_YOUR_BACKUP_SECRET_KEY_'
+export LMIAB_MAIL_BACKUP_BUCKET='_YOUR_OLD_MAIL_BACKUP_BUCKET_'
+export LMIAB_NEXTCLOUD_BACKUP_BUCKET='_YOUR_OLD_NEXTCLOUD_BACKUP_BUCKET_'
+```
+
+Add `--restore` option when creating new box.
+
+```
+sh lightsail-miab-installer.sh \
+  --installation-id new-demo \
+  --az ap-southeast-1c \
+  --hostname new-box.example.com \
+  --email 'admin@new-demo.example.com' \
+  --password 'lightsaildemo123' \
+  --restore
+```
+
+Assuming that you will use your old IP address for your new box, you need to add a DNS A record of `new-box.example.com` to point to your old IP. Afterward, on the Amazon Lightsail instance, you should detach the static IP from the old box and assign it to the new one.
+
+### Destroy installation
+
+You have two options to destroy your Mail-in-a-Box installation which was installed by lightsail-miab-installer. You can use `--destroy` option as shown in the example below.
+
+```sh
+sh lightsail-miab-installer.sh \
+  --installation-id demo \
+  --az ap-southeast-1c \
+  --destroy
+```
+
+There will be a confirmation, you need to type "yes" to destroy.
+
+```
+This action will destroy CloudFormation stack 'demo' (ap-southeast-1).
+Type 'yes' to continue:
 ```
 
 ### Dry run mode
@@ -260,6 +301,10 @@ ssh-add /path/to/your/ssh-private.key
 
 ## Changelog
 
+### v1.0 (2023-07-18)
+
+- Automatic restore from S3 backup
+
 ### v1.0-RC1 (2023-06-20)
 
 - Initial release candidate
@@ -267,7 +312,7 @@ ssh-add /path/to/your/ssh-private.key
 ## Todo
 
 - [ ] Automatically generate TLS certificates for main domain
-- [ ] Automatically restore from S3 backup
+- [x] Automatically restore from S3 backup
 - [ ] Test on different shells (dash, zsh)
 
 ## Credits
@@ -279,7 +324,7 @@ This project is heavily inspired from:
 
 ## Contributing
 
-Fork this repo and send me a PR. I am happy to review and merge it.
+Fork this repo and send me a PR.
 
 ## License
 
