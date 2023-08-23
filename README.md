@@ -54,6 +54,7 @@ Prerequisites for running this script:
 lightsail-miab-installer has been tested using following shells:
 
 - bash v4.2 (Linux)
+- zsh v5.8.1 (macOS, Linux)
 
 ## Installation
 
@@ -301,6 +302,11 @@ ssh-add /path/to/your/ssh-private.key
 
 ## Changelog
 
+### v1.1 (2023-08-23)
+
+- Added support for new shell: zsh
+- Added support for macOS
+
 ### v1.0 (2023-07-18)
 
 - Automatic restore from S3 backup
@@ -313,7 +319,7 @@ ssh-add /path/to/your/ssh-private.key
 
 - [ ] Automatically generate TLS certificates for main domain
 - [x] Automatically restore from S3 backup
-- [ ] Test on different shells (dash, zsh)
+- [ ] Test on different shells (dash, ~zsh~)
 
 ## Credits
 

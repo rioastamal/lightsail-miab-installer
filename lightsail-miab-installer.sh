@@ -182,7 +182,7 @@ lmiab_sign_hmac_sha256()
   while [ $# -gt 0 ]; do
     case $1 in
       # --key) local _KEY="$( echo -n "$2" | base64 -d -i )"; shift ;;
-      --key) local _KEY="$( echo -n "$2" | base64 -d -i | xxd -p | tr -d '\n' )"; shift ;;
+      --key) local _KEY="$( echo -n "$2" | sed 's/[^A-Za-z0-9+/=]//g' | base64 -d | xxd -p | tr -d '\n' )"; shift ;;
       --message) local _MESSAGE="$2"; shift ;;
       *) echo "Unrecognised option passed: $1" 2>&2; return 1;;
     esac
@@ -256,7 +256,7 @@ lmiab_get_lightsail_regions()
   local _REGIONS=""
   
   [ -f "$_CACHEFILE" ] && _REGIONS="$( cat $_CACHEFILE )"
-  [ ! -f "$_CACHEFILE" ] && {
+  ( [ ! -f "$_CACHEFILE" ] || [ -z "$_REGIONS" ] ) && {
     _REGIONS="$( aws lightsail get-regions | jq -r '.regions[] | (.name + "\t" + .displayName)' )"
     echo "$_REGIONS" > $_CACHEFILE
   }
@@ -1392,12 +1392,13 @@ lmiab_init()
   
   for _env in LMIAB_MAIL_BACKUP_BUCKET LMIAB_NEXTCLOUD_BACKUP_BUCKET LMIAB_BACKUP_SECRET_KEY
   do
-    [ -z "${!_env}" ] && [ "$LMIAB_IS_RESTORE" = "yes" ] && {
+    eval "local _value=\${$_env}"
+    [ -z "$_value" ] && [ "$LMIAB_IS_RESTORE" = "yes" ] && {
       echo "Missing env '$_env' value." >&2
       return 1
     }
     
-    [ ! -z "${!_env}" ] && [ "$LMIAB_IS_RESTORE" = "no" ] && {
+    [ ! -z "$_value" ] && [ "$LMIAB_IS_RESTORE" = "no" ] && {
       echo "Env '$_env' can only be used with --restore flag." >&2
       return 1
     }
