@@ -1476,7 +1476,6 @@ while [ $# -gt 0 ]; do
     ;;
     --dry-run)
       LMIAB_DRY_RUN="yes"
-      shift 
     ;;
     --email)
       LMIAB_ADMIN_EMAIL="$2"
