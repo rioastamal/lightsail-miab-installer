@@ -180,7 +180,7 @@ Default availability zone is `us-east-1a`. To change the availability zone you c
 ```sh
 sh lightsail-miab-installer.sh \
   --installation-id demo \
-  --az eu-west-1 \
+  --az eu-west-1a \
   --hostname box.example.com \
   --email 'admin@example.com' \
   --password 'lightsaildemo123' \
@@ -239,7 +239,7 @@ To execute the script in dry run mode, use the `--dry-run` option. This will pri
 ```sh
 sh lightsail-miab-installer.sh \
   --installation-id demo \
-  --az eu-west-1 \
+  --az eu-west-1a \
   --hostname box.example.com \
   --email 'admin@example.com' \
   --password 'lightsaildemo123' \
@@ -301,6 +301,11 @@ ssh-add /path/to/your/ssh-private.key
 ```
 
 ## Changelog
+
+### v1.2 (2024-01-09)
+
+- Bugfix: Resolved [unexpected behavior](https://github.com/rioastamal/lightsail-miab-installer/issues/3) with the `--dry-run` option.
+- Bugfix: Script [no longer works](https://github.com/rioastamal/lightsail-miab-installer/issues/4) due to Ubuntu updates. Thanks to [@paulj-net](https://github.com/paulj-net) for providing the fixes.
 
 ### v1.1 (2023-08-23)
 
